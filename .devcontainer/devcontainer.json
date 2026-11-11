@@ -1,0 +1,22 @@
+{
+  "name": "Math Chess Environment",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/desktop-lite:1": {
+      "version": "latest"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "vscjava.vscode-java-pack",
+        "vscjava.vscode-java-dependency"
+      ]
+    }
+  },
+  "containerEnv": {
+    "DISPLAY": ":1"
+  }
+}
