@@ -23,6 +23,8 @@ public class AssetManager {
         {
             registerImage(new Drawable.ImageData("BG/Boards/Chess"));
             registerImage(new Drawable.ImageData("Pieces/White/Queen"));
+            registerImage(new Drawable.ImageData("Pieces/Black/Queen"));
+
         }
         catch(IOException e)
         {

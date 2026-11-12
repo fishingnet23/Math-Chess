@@ -1,17 +1,18 @@
 import javax.swing.*;
-
 import java.awt.*;
+import java.awt.event.*;
 import java.awt.image.BufferedImage;
-import java.io.File;
-import java.io.IOException;
 import java.util.ArrayList;
-
-import javax.imageio.ImageIO;
 
 public class Game extends JPanel {
 
     private AssetManager assets;
+    private Drawable.DrawRect windowSurface;
     private Board board;
+    private Drawable.DrawRect boardSurface;
+
+    private Piece selected;
+
     public Game() {
         board = new Board(8, 8, "BG/Boards/Chess");
         assets = new AssetManager();
@@ -25,35 +26,54 @@ public class Game extends JPanel {
         Piece.IntentionVector slideDownRight = new Piece.IntentionVector(new Piece.Coordinate(1,-1),Piece.MovementType.Continuous);
         Piece.IntentionVector slideDownLeft = new Piece.IntentionVector(new Piece.Coordinate(-1,-1),Piece.MovementType.Continuous);
 
-
-        Piece wQueen = new Piece("Queen", new Drawable.ImageData("White/Queen"), new ArrayList<Piece.IntentionVector>(
+        Piece wQueen = new Piece("Queen", new Drawable.ImageData("Pieces/White/Queen"), new ArrayList<Piece.IntentionVector>(
             java.util.Arrays.asList(slideUp, slideLeft, slideDown, slideRight,slideUpRight,slideUpLeft,slideDownLeft,slideDownRight)));
-        board.setPiece(4, 0, wQueen);
-    }
+        
+        Piece bQueen = new Piece(wQueen);
+        bQueen.setTeam(Piece.Team.P2);
+        bQueen.setImage(new Drawable.ImageData("Pieces/Black/Queen"));
 
-    private void drawImageRelativeTo(Graphics2D g2d,BufferedImage originalImage,int surfaceWidth, int surfaceHeight, double relativeX,double relativeY)
+        board.setPiece(3, 0, wQueen);
+        board.setPiece(3,7, bQueen);
+
+        // detect clicking
+
+        addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                for (int i = 0; i < board.getRows(); i++) {
+                    for (int j = 0; j < board.getColumns(); j++) {
+                        Drawable.DrawRect region = board.tileToRegion(boardSurface, j, i, assets);
+                        if(region == null)
+                            continue;
+                        if(region.pointInside(e.getPoint().getX(),e.getPoint().getY()))
+                        {
+                            System.out.println("tile: " + j +", " + i);
+                            
+                            Piece p = board.getPiece(j,i);
+                            
+                            if(selected != null)
+                                board.tryMove(selected.getPosition(), new Piece.Coordinate(j,i));
+                            repaint();
+                            
+                            selected = p;
+                            if(p==null)
+                                continue;
+
+
+                        }
+                    }
+                }
+            }
+        });
+
+    }
+    private void drawImage(Graphics2D g2d,BufferedImage image, Drawable.DrawRect data)
     {
-        if(originalImage == null)
+        if(image == null)
             return;
 
-        int imgWidth = originalImage.getWidth();
-        int imgHeight = originalImage.getHeight();
-        
-        double widthRatio = (double) surfaceWidth / imgWidth;
-        double heightRatio = (double) surfaceHeight / imgHeight;
-        double bestRatio = Math.min(widthRatio, heightRatio); // smushes down to fit whole image
-        // if it's changed to Math.max, it will crop instead
-
-        int newWidth = (int) (imgWidth * bestRatio);
-        int newHeight = (int) (imgHeight * bestRatio);
-
-        int targetCenterX = (int) (surfaceWidth * relativeX);
-        int targetCenterY = (int) (surfaceHeight * relativeY);
-
-        int x = targetCenterX - (newWidth / 2);
-        int y = targetCenterY - (newHeight / 2);
-
-        g2d.drawImage(originalImage, x, y, newWidth, newHeight, null);
+        g2d.drawImage(image, (int) data.x(), (int) data.y(), (int) data.w(), (int) data.h(), null);
     }
     @Override
     protected void paintComponent(Graphics g) {
@@ -61,8 +81,26 @@ public class Game extends JPanel {
         
         Graphics2D g2d = (Graphics2D) g;
 
-        BufferedImage boardImg = assets.requestImage(board.getImage());
-        drawImageRelativeTo(g2d, boardImg,getWidth(),getHeight(),0.5,0.5);
+        windowSurface = new Drawable.DrawRect(0,0,getWidth(),getHeight());
 
+        BufferedImage boardImg = assets.requestImage(board.getImage());
+        Drawable.DrawRect boardDimensions = new Drawable.DrawRect(0.5,0.5,1,1);
+
+        boardSurface = board.calculateDrawRect(boardImg,windowSurface, boardDimensions);
+
+        drawImage(g2d, boardImg, boardSurface);
+
+        for (int i=0;i<board.getRows();i++) {
+            for (int j=0;j<board.getColumns();j++) {
+                Piece p = board.getPiece(j, i);
+                if(p == null)
+                    continue;
+                BufferedImage pieceImg = assets.requestImage(p.getImage());
+                Drawable.DrawRect pieceRect = board.tileToRegion(boardSurface, j, i, assets);
+                                
+                drawImage(g2d, pieceImg, pieceRect);
+                System.out.println("Drew: " + j +", " + i);
+            }
+        }
     }
 }

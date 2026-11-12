@@ -1,21 +1,32 @@
 import java.util.ArrayList;
 import java.util.List;
+import java.awt.image.BufferedImage;
 
 public class Board extends Drawable
 {
     Piece[][] gameState;
-
+    int r;
+    int c;
     public Board(int x,int y, String imagePath)
     {
         gameState = new Piece[y][x];
+        r=y;
+        c=x;
         this.setImage(new ImageData(imagePath));
+    }
+
+    public int getRows()
+    {
+        return r;
+    }
+    public int getColumns()
+    {
+        return c;
     }
 
     public boolean inBounds(int x, int y)
     {
-        if(y >= gameState.length || y<0)
-            return false;
-        return x<gameState[y].length && x>=0;
+        return y < gameState.length && y>=0 && x<gameState[y].length && x>=0;
     }
 
     public void setPiece(int x,int y, Piece p)
@@ -23,6 +34,7 @@ public class Board extends Drawable
         if(!inBounds(x, y))
             return;
         gameState[y][x] = new Piece(p); // copy constructor
+        gameState[y][x].setPosition(new Piece.Coordinate(x,y));
     }
 
     public Piece getPiece(int x, int y)
@@ -56,43 +68,62 @@ public class Board extends Drawable
     {
         // if the piece doesn't exist, it can't move anywhere
         if(p == null)
+        { 
+            System.out.println("invalid piece trying to move");
             return;
+        }
 
         // if the position isn't even on the board, don't try going there
         if(!inBounds(x, y))
+        {           
             return;
+        }
         // if this move must be the first move, and the piece has moved, this move is invalid
         if(intent.firstMove() && p.hasMoved())
+        {
+            System.out.println("Must be first move!");
             return;
-
+        }
         // inspect the target position
         Piece otherPiece = getPiece(x,y);
-
         // if the space must be empty but it's not, don't go there
         if(intent.mustBeEmpty() && otherPiece != null)
+        {
+            System.out.println("Space must be empty!");
             return;
-
+        }
         // can't friendly fire
         if(!intent.friendlyFire() && otherPiece != null && otherPiece.getTeam() == p.getTeam())
+        {
+            System.out.println("Can't friendly fire!" + p.getTeam() +" "+ otherPiece.getTeam());
             return;
-
+        }
          // if the move can only happen if it captures an enemy and there is no enemy present to capture, don't go there
         if(intent.mustBeCapture() && (otherPiece == null || otherPiece.getTeam() == p.getTeam()))
+        {
+            System.out.println("Must be a capture!");
             return;
-
+        }
         if(intent.destinationMustBeSafe() && inDanger(p, x, y, p.getTeam()) || compromisesTeam(p, x, y, p.getTeam())) // if moving to that position puts the piece/team in danger, don't go there
+        {
+            System.out.println("Destination must be safe for the team!");
             return;
+        }
 
 
         validMovesAccumulator.add(new Piece.Coordinate(x, y));
 
         // if an enemy has been captured, stop regardless
         if (!intent.ignoreEnemy() && otherPiece != null && otherPiece.getTeam() != p.getTeam()) {
-            return; 
+            System.out.println("Enemy has been captured, stopping path");
+            return;
         }
 
         if(intent.moveType() == Piece.MovementType.Direct)
+        {
+            System.out.println("Direct move, stopping");
             return; // Direct movement means try only once
+        }
         if(intent.moveType() == Piece.MovementType.Continuous) // Repeat until the position fails the conditions
             tryIntent(p,intent, x + intent.coordinate().x(),y + intent.coordinate().y(), validMovesAccumulator); // recursively travel down the path
     }
@@ -123,16 +154,18 @@ public class Board extends Drawable
     public boolean tryMove(Piece.Coordinate current,Piece.Coordinate target)
     {
         Piece p = getPiece(current);
+        System.out.println("Trying to move:");
         if(p==null)
             return false;
-
+    
         List<Piece.Coordinate> validMoves = validMovesOfPiece(current);
-
+        System.out.println(validMoves);
         boolean thisMoveIsValid = false;
         for(Piece.Coordinate coord:validMoves)
         {   
             if(coord.equals(target))
             {
+               
                 thisMoveIsValid = true;
                 break;
             }
@@ -140,13 +173,24 @@ public class Board extends Drawable
         
         if(!thisMoveIsValid)
             return false;
-
+        System.out.println("Valid move found!");
         // make the move since it's valid 
         // don't care if there's a piece already occupying the new spot, that should have been verified already
 
         setPiece(target,p);
+        gameState[current.y()][current.x()] = null;
 
         return true;
     }
 
+    public DrawRect tileToRegion(DrawRect boardSurface, int x, int y, AssetManager assets)
+    {
+
+        Drawable.DrawRect pieceRect = calculateDrawRect(boardSurface, new Drawable.DrawRect(x*1.0/c, 1-y*1.0/r, 1.0/c,1.0/r));
+        
+        // offset to center
+        pieceRect = new Drawable.DrawRect(pieceRect.x() + pieceRect.w() / 2,pieceRect.y() - pieceRect.h() / 2,pieceRect.w(),pieceRect.h());
+    
+        return pieceRect;
+    }
 }
