@@ -4,23 +4,39 @@ import java.util.List;
 public class Piece extends Drawable
 {
    
-    public enum MovementType {Direct,Continuous}
+    public enum MovementType {Direct,Continuous,FixedStep}
     public enum Team {P1,P2}
     
     public record Coordinate(int x, int y) {}
     public record IntentionVector(
         Coordinate coordinate,
         MovementType moveType,
-        boolean destinationMustBeSafe,
         boolean mustBeEmpty, 
         boolean mustBeCapture,
         boolean firstMove,
         boolean friendlyFire,
-        boolean ignoreEnemy)
+        boolean ignoreEnemy,
+        int maxSteps)
     {
         public IntentionVector(Coordinate coordinate, MovementType moveType) {
-            this(coordinate, moveType, false,false,false,false,false,false);
+            this(coordinate, moveType,false,false,false,false,false,0);
         }
+        public IntentionVector(Coordinate coordinate, MovementType moveType,boolean mustBeEmpty) {
+            this(coordinate, moveType,mustBeEmpty,false,false,false,false,0);
+        }
+        public IntentionVector(Coordinate coordinate, MovementType moveType,boolean mustBeEmpty,boolean mustBeCapture) {
+            this(coordinate, moveType,mustBeEmpty,mustBeCapture,false,false,false,0);
+        }
+        public IntentionVector(Coordinate coordinate, MovementType moveType,boolean mustBeEmpty,boolean mustBeCapture,boolean firstMove) {
+            this(coordinate, moveType,mustBeEmpty,mustBeCapture,firstMove,false,false,0);
+        }
+        public IntentionVector(Coordinate coordinate, MovementType moveType,boolean mustBeEmpty,boolean mustBeCapture,boolean firstMove, boolean friendlyFire) {
+            this(coordinate, moveType,mustBeEmpty,mustBeCapture,firstMove,friendlyFire,false,0);
+        }
+        public IntentionVector(Coordinate coordinate, MovementType moveType,boolean mustBeEmpty,boolean mustBeCapture,boolean firstMove, boolean friendlyFire, boolean ignoreEnemy) {
+            this(coordinate, moveType,mustBeEmpty,mustBeCapture,firstMove,friendlyFire,ignoreEnemy,0);
+        }
+
     }
 
     private String name;

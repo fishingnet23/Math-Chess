@@ -9,10 +9,21 @@ public class Board extends Drawable
     int c;
     public Board(int x,int y, String imagePath)
     {
-        gameState = new Piece[y][x];
         r=y;
         c=x;
         this.setImage(new ImageData(imagePath));
+        clear();
+    }
+    public Board(int x, int y)
+    {
+        r=y;
+        c=x;
+        clear();
+    }
+
+    public void clear()
+    {
+        gameState = new Piece[r][c];
     }
 
     public int getRows()
@@ -55,16 +66,81 @@ public class Board extends Drawable
         return getPiece(coordinate.x(), coordinate.y());
     }
 
-    private boolean compromisesTeam(Piece p,int x, int y, Piece.Team ally)
+    private boolean compromisesTeam(Piece toMove,Piece.Coordinate targetPos, Piece.Team ally)
     {
-        return false; // temporary implementation, will check if the move compromises a teammate with the "mustBeSafe" property
+        
+
+        for(int i=0;i<gameState.length;i++)
+            for(int j=0;j<gameState[i].length;j++)
+            {
+                Piece pieceAtPos = getPiece(j,i);
+                if(pieceAtPos == null)
+                    continue;
+                if(!pieceAtPos.mustBeSafe() || pieceAtPos.getTeam() != ally) 
+                    continue;
+                // only check pieces that must be safe and are on the team
+                
+                // simulate move
+                Piece.Coordinate oldPos = toMove.getPosition();
+                Piece atTarget = getPiece(targetPos); // cache in case moving the piece would be a capture
+
+                gameState[oldPos.y()][oldPos.x()] = null;
+                gameState[targetPos.y()][targetPos.x()] = toMove;
+                toMove.setPosition(targetPos);
+                boolean inDanger = inDanger(pieceAtPos);
+
+                // return state to what it was before
+                gameState[targetPos.y()][targetPos.x()] = atTarget; // return a captured piece to its old position
+                gameState[oldPos.y()][oldPos.x()] = toMove;
+                toMove.setPosition(oldPos);
+
+                if(inDanger)
+                    return true;
+            }
+
+        return false;
     }
 
-    private boolean inDanger(Piece p,int x, int y, Piece.Team ally)
+    private boolean inDanger(Piece p)
     {
-        return true; // temporary implementation, will check if any pieces can reach these coordinates next turn
+        
+        for(int i=0;i<gameState.length;i++)
+            for(int j=0;j<gameState[i].length;j++)
+            {
+                Piece pieceAtPos = getPiece(j,i);
+                if(pieceAtPos == null || pieceAtPos == p)
+                    continue;
+
+                List<Piece.Coordinate> moves = allAttackedPositions(pieceAtPos);
+                for(Piece.Coordinate move:moves)
+                    if(move.equals(p.getPosition()))
+                        return true;
+            }
+
+        return false;
     }
-    private void tryIntent(Piece p,Piece.IntentionVector intent, int x, int y, List<Piece.Coordinate> validMovesAccumulator)
+
+    private List<Piece.Coordinate> allAttackedPositions(Piece p)
+    {
+        if(p == null)
+            return new ArrayList(); // invalid pieces can move nowhere
+        
+        List<Piece.IntentionVector> pieceIntentions = p.getMovementIntentions(); // ask piece where it wants to go
+
+        List<Piece.Coordinate> validMoves = new ArrayList();
+
+        for(Piece.IntentionVector intent:pieceIntentions)
+        {
+            tryIntent(p, intent,p.getPosition().x() + intent.coordinate().x(),p.getPosition().y() + intent.coordinate().y(), validMoves, true); 
+        }
+
+
+        return validMoves;
+    }
+
+    private void tryIntent(Piece p,Piece.IntentionVector intent, int x, int y, List<Piece.Coordinate> validMovesAccumulator, boolean unsafe)
+    {tryIntent(p, intent, x, y, validMovesAccumulator, unsafe,0);}
+    private void tryIntent(Piece p,Piece.IntentionVector intent, int x, int y, List<Piece.Coordinate> validMovesAccumulator, boolean unsafe, int currentStep)
     {
         // if the piece doesn't exist, it can't move anywhere
         if(p == null)
@@ -98,20 +174,14 @@ public class Board extends Drawable
             System.out.println("Can't friendly fire!" + p.getTeam() +" "+ otherPiece.getTeam());
             return;
         }
-         // if the move can only happen if it captures an enemy and there is no enemy present to capture, don't go there
-        if(intent.mustBeCapture() && (otherPiece == null || otherPiece.getTeam() == p.getTeam()))
+
+        if(intent.moveType() == Piece.MovementType.FixedStep && intent.maxSteps() <= currentStep)
         {
-            System.out.println("Must be a capture!");
+            System.out.println("Fixed step has ended: " + intent.maxSteps() + " " + currentStep);
             return;
         }
-        if(intent.destinationMustBeSafe() && inDanger(p, x, y, p.getTeam()) || compromisesTeam(p, x, y, p.getTeam())) // if moving to that position puts the piece/team in danger, don't go there
-        {
-            System.out.println("Destination must be safe for the team!");
-            return;
-        }
-
-
-        validMovesAccumulator.add(new Piece.Coordinate(x, y));
+        if(unsafe || !unsafe && (!intent.mustBeCapture() || otherPiece != null && otherPiece.getTeam() != p.getTeam()) && !compromisesTeam(p, new Piece.Coordinate(x, y), p.getTeam()))
+            validMovesAccumulator.add(new Piece.Coordinate(x, y));
 
         // if an enemy has been captured, stop regardless
         if (!intent.ignoreEnemy() && otherPiece != null && otherPiece.getTeam() != p.getTeam()) {
@@ -124,11 +194,12 @@ public class Board extends Drawable
             System.out.println("Direct move, stopping");
             return; // Direct movement means try only once
         }
-        if(intent.moveType() == Piece.MovementType.Continuous) // Repeat until the position fails the conditions
-            tryIntent(p,intent, x + intent.coordinate().x(),y + intent.coordinate().y(), validMovesAccumulator); // recursively travel down the path
+
+        if(intent.moveType() == Piece.MovementType.Continuous || intent.moveType() == Piece.MovementType.FixedStep) // Repeat until the position fails the conditions
+            tryIntent(p,intent, x + intent.coordinate().x(),y + intent.coordinate().y(), validMovesAccumulator, unsafe, currentStep+1); // recursively travel down the path
     }
 
-    public List<Piece.Coordinate> validMovesOfPiece(Piece p,Piece.Coordinate currentPosition)
+    public List<Piece.Coordinate> validMovesOfPiece(Piece p)
     {
         if(p == null)
             return new ArrayList(); // invalid pieces can move nowhere
@@ -139,7 +210,7 @@ public class Board extends Drawable
 
         for(Piece.IntentionVector intent:pieceIntentions)
         {
-            tryIntent(p, intent,currentPosition.x() + intent.coordinate().x(),currentPosition.y() + intent.coordinate().y(), validMoves); 
+            tryIntent(p, intent,p.getPosition().x() + intent.coordinate().x(),p.getPosition().y() + intent.coordinate().y(), validMoves, false); 
         }
 
 
@@ -148,11 +219,12 @@ public class Board extends Drawable
     
     public List<Piece.Coordinate> validMovesOfPiece(Piece.Coordinate currentPosition)
     {
-        return validMovesOfPiece(getPiece(currentPosition),currentPosition);
+        return validMovesOfPiece(getPiece(currentPosition));
     }
 
     public boolean tryMove(Piece.Coordinate current,Piece.Coordinate target)
     {
+
         Piece p = getPiece(current);
         System.out.println("Trying to move:");
         if(p==null)
@@ -177,6 +249,7 @@ public class Board extends Drawable
         // make the move since it's valid 
         // don't care if there's a piece already occupying the new spot, that should have been verified already
 
+        p.setHasMoved(true);
         setPiece(target,p);
         gameState[current.y()][current.x()] = null;
 

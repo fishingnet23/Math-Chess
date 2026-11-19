@@ -3,6 +3,7 @@ import java.awt.*;
 import java.awt.event.*;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
+import java.util.List;
 
 public class Game extends JPanel {
 
@@ -12,30 +13,22 @@ public class Game extends JPanel {
     private Drawable.DrawRect boardSurface;
 
     private Piece selected;
+    private Piece.Team turn;
 
-    public Game() {
-        board = new Board(8, 8, "BG/Boards/Chess");
+    public void restart(GamePreset preset)
+    {
+        board = new Board(8, 8);
+        board.clear();
+        selected = null;
+        turn = Piece.Team.P1;
+        preset.setup(assets, board);
+        repaint();
+    }
+
+    public Game(GamePreset preset) {
         assets = new AssetManager();
-
-        Piece.IntentionVector slideUp = new Piece.IntentionVector(new Piece.Coordinate(0,1),Piece.MovementType.Continuous);
-        Piece.IntentionVector slideLeft = new Piece.IntentionVector(new Piece.Coordinate(-1,0),Piece.MovementType.Continuous);
-        Piece.IntentionVector slideDown = new Piece.IntentionVector(new Piece.Coordinate(0,-1),Piece.MovementType.Continuous);
-        Piece.IntentionVector slideRight = new Piece.IntentionVector(new Piece.Coordinate(1,0),Piece.MovementType.Continuous);
-        Piece.IntentionVector slideUpRight = new Piece.IntentionVector(new Piece.Coordinate(1,1),Piece.MovementType.Continuous);
-        Piece.IntentionVector slideUpLeft = new Piece.IntentionVector(new Piece.Coordinate(-1,1),Piece.MovementType.Continuous);
-        Piece.IntentionVector slideDownRight = new Piece.IntentionVector(new Piece.Coordinate(1,-1),Piece.MovementType.Continuous);
-        Piece.IntentionVector slideDownLeft = new Piece.IntentionVector(new Piece.Coordinate(-1,-1),Piece.MovementType.Continuous);
-
-        Piece wQueen = new Piece("Queen", new Drawable.ImageData("Pieces/White/Queen"), new ArrayList<Piece.IntentionVector>(
-            java.util.Arrays.asList(slideUp, slideLeft, slideDown, slideRight,slideUpRight,slideUpLeft,slideDownLeft,slideDownRight)));
         
-        Piece bQueen = new Piece(wQueen);
-        bQueen.setTeam(Piece.Team.P2);
-        bQueen.setImage(new Drawable.ImageData("Pieces/Black/Queen"));
-
-        board.setPiece(3, 0, wQueen);
-        board.setPiece(3,7, bQueen);
-
+        restart(preset);
         // detect clicking
 
         addMouseListener(new MouseAdapter() {
@@ -51,15 +44,22 @@ public class Game extends JPanel {
                             System.out.println("tile: " + j +", " + i);
                             
                             Piece p = board.getPiece(j,i);
-                            
-                            if(selected != null)
-                                board.tryMove(selected.getPosition(), new Piece.Coordinate(j,i));
-                            repaint();
-                            
-                            selected = p;
-                            if(p==null)
-                                continue;
 
+                            if(p!=null && p.getTeam() == turn)
+                                if(selected == p)
+                                    selected = null;
+                                else
+                                    selected = p;
+
+                            if(selected != null && selected != p)
+                            {
+
+                                if(board.tryMove(selected.getPosition(), new Piece.Coordinate(j,i)))
+                                    turn = turn == Piece.Team.P1? Piece.Team.P2 : Piece.Team.P1;
+                                selected = null;
+                            }
+                            
+                            repaint();
 
                         }
                     }
@@ -90,6 +90,22 @@ public class Game extends JPanel {
 
         drawImage(g2d, boardImg, boardSurface);
 
+        if(selected != null)
+        {
+            List<Piece.Coordinate> validMoves = board.validMovesOfPiece(selected);
+            for(Piece.Coordinate coord:validMoves)
+            {
+                Drawable.DrawRect tileRect = board.tileToRegion(boardSurface, coord.x(), coord.y(), assets);
+                Piece captured = board.getPiece(coord);
+                if(captured == null)
+                    g2d.setColor(new Color(255,100,100,100));
+                else
+                    g2d.setColor(new Color(100,255,100,150));
+                g2d.fillRect((int)Math.ceil(tileRect.x()), (int)Math.ceil(tileRect.y()), (int)Math.ceil(tileRect.w()), (int)Math.ceil(tileRect.h()));
+            }
+
+        }
+
         for (int i=0;i<board.getRows();i++) {
             for (int j=0;j<board.getColumns();j++) {
                 Piece p = board.getPiece(j, i);
@@ -99,8 +115,13 @@ public class Game extends JPanel {
                 Drawable.DrawRect pieceRect = board.tileToRegion(boardSurface, j, i, assets);
                                 
                 drawImage(g2d, pieceImg, pieceRect);
-                System.out.println("Drew: " + j +", " + i);
+                // System.out.println("Drew: " + j +", " + i);
             }
         }
+    }
+
+    @Override
+    public Dimension getPreferredSize() {
+        return new Dimension(700, 700);
     }
 }
